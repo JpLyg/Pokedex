@@ -1,17 +1,18 @@
 package main
 
 import (
+	"Pokedex/internal/pokeapi"
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
-	conf := &config{}
+	conf := &config{
+		API: pokeapi.NewClient("https://pokeapi.co", 5*time.Minute),
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
@@ -52,8 +53,9 @@ type cliCommand struct {
 }
 
 type config struct {
-	next     string
-	previous string
+	Next     *string
+	Previous *string
+	API      *pokeapi.Client
 }
 
 type LocationAreaResponse struct {
@@ -92,76 +94,43 @@ var commands = map[string]cliCommand{
 }
 
 func commandMap(conf *config) error {
-	var target_url string
-	if conf.next != "" {
-		target_url = conf.next
+	var page pokeapi.LocationAreaList
+	var err error
+	if conf.Next == nil {
+		page, err = conf.API.GetLocationAreasFirstPage()
 	} else {
-		target_url = "https://pokeapi.co/api/v2/location-area"
+		page, err = conf.API.GetLocationAreasByURL(*conf.Next)
 	}
-	resp, err := http.Get(target_url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 
-	var poke_maps LocationAreaResponse
-
-	err = json.Unmarshal(content, &poke_maps)
-	if err != nil {
-		return err
+	for _, r := range page.Results {
+		fmt.Println(r.Name)
 	}
 
-	for _, item := range poke_maps.Results {
-		fmt.Println(item.Name)
-	}
-
-	conf.next = poke_maps.Next
-	conf.previous = poke_maps.Previous
-
+	conf.Next = page.Next
+	conf.Previous = page.Previous
 	return nil
-
 }
 
 func commandMapb(conf *config) error {
-	var target_url string
-	if conf.previous != "" {
-		target_url = conf.previous
-	} else {
+	if conf.Previous == nil {
 		fmt.Println("you're on the first page")
 		return nil
 	}
-	resp, err := http.Get(target_url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	content, err := io.ReadAll(resp.Body)
+	page, err := conf.API.GetLocationAreasByURL(*conf.Previous)
 	if err != nil {
 		return err
 	}
 
-	var poke_maps LocationAreaResponse
-
-	err = json.Unmarshal(content, &poke_maps)
-	if err != nil {
-		return err
+	for _, r := range page.Results {
+		fmt.Println(r.Name)
 	}
 
-	for _, item := range poke_maps.Results {
-		fmt.Println(item.Name)
-	}
-
-	conf.next = poke_maps.Next
-	conf.previous = poke_maps.Previous
-
+	conf.Next = page.Next
+	conf.Previous = page.Previous
 	return nil
-
 }
 
 func commandExit(conf *config) error {
