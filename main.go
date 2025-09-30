@@ -28,12 +28,14 @@ func main() {
 			continue
 		}
 
+		args := parts[1:]
+
 		cmd, ok := commands[parts[0]]
 		if !ok {
 			fmt.Println("Unknown command")
 			continue
 		}
-		if err := cmd.callback(conf); err != nil {
+		if err := cmd.callback(conf, args); err != nil {
 			fmt.Println("Error:", err)
 		}
 
@@ -49,7 +51,7 @@ func main() {
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(conf *config) error
+	callback    func(conf *config, args []string) error
 }
 
 type config struct {
@@ -91,9 +93,34 @@ var commands = map[string]cliCommand{
 		description: "Displays the map",
 		callback:    commandMapb,
 	},
+	"explore": {
+		name:        "explore",
+		description: "Explore pokemons in map",
+		callback:    explore,
+	},
 }
 
-func commandMap(conf *config) error {
+func explore(conf *config, args []string) error {
+	if len(args) < 1 {
+		fmt.Println("Usage: explore <area_name>")
+		return nil
+	}
+	area := args[0]
+	fmt.Printf("Exploring %s...\n", area)
+
+	loc, err := conf.API.GetLocation(area)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Found Pokemon:")
+	for _, enc := range loc.PokemonEncounters {
+		fmt.Printf(" - %s\n", enc.Pokemon.Name)
+	}
+	return nil
+}
+
+func commandMap(conf *config, args []string) error {
 	var page pokeapi.LocationAreaList
 	var err error
 	if conf.Next == nil {
@@ -114,7 +141,7 @@ func commandMap(conf *config) error {
 	return nil
 }
 
-func commandMapb(conf *config) error {
+func commandMapb(conf *config, args []string) error {
 	if conf.Previous == nil {
 		fmt.Println("you're on the first page")
 		return nil
@@ -133,13 +160,13 @@ func commandMapb(conf *config) error {
 	return nil
 }
 
-func commandExit(conf *config) error {
+func commandExit(conf *config, args []string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(conf *config) error {
+func commandHelp(conf *config, args []string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println()
@@ -148,7 +175,7 @@ func commandHelp(conf *config) error {
 	return nil
 }
 
-func cleanInput(text string) []string {
+func cleanInput(text string, args []string) []string {
 	text = strings.TrimSpace(text)
 	text = strings.ToLower(text)
 	return strings.Fields(text)
