@@ -4,6 +4,7 @@ import (
 	"Pokedex/internal/pokeapi"
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -11,7 +12,8 @@ import (
 
 func main() {
 	conf := &config{
-		API: pokeapi.NewClient("https://pokeapi.co", 5*time.Minute),
+		API:           pokeapi.NewClient("https://pokeapi.co", 5*time.Minute),
+		caughtPokemon: make(map[string]pokeapi.Pokemon),
 	}
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -55,9 +57,10 @@ type cliCommand struct {
 }
 
 type config struct {
-	Next     *string
-	Previous *string
-	API      *pokeapi.Client
+	Next          *string
+	Previous      *string
+	API           *pokeapi.Client
+	caughtPokemon map[string]pokeapi.Pokemon
 }
 
 type LocationAreaResponse struct {
@@ -98,6 +101,91 @@ var commands = map[string]cliCommand{
 		description: "Explore pokemons in map",
 		callback:    explore,
 	},
+	"catch": {
+		name:        "catch",
+		description: "catch pokemons in map",
+		callback:    catch,
+	},
+	"inspect": {
+		name:        "inspect ",
+		description: "inspect pokemons",
+		callback:    inspect,
+	},
+	"pokedex": {
+		name:        "pokedex ",
+		description: "list caught pokemons",
+		callback:    pokedex,
+	},
+}
+
+func pokedex(conf *config, args []string) error {
+	if len(conf.caughtPokemon) < 1 {
+		fmt.Println("No Pokemon Available")
+	} else {
+		for _, t := range conf.caughtPokemon {
+			fmt.Println(" -" + t.Name)
+		}
+	}
+
+	return nil
+}
+
+func inspect(conf *config, args []string) error {
+	if len(args) < 1 {
+		fmt.Println("Usage: catch <pokemon_name>")
+		return nil
+	}
+	pokemonName := args[0]
+
+	pokemon, ok := conf.caughtPokemon[pokemonName]
+
+	if !ok {
+		fmt.Println(pokemon.Name + " data not available")
+		return nil
+	} else {
+		fmt.Println("Name: " + pokemon.Name)
+		fmt.Println("Height:", pokemon.Height)
+		fmt.Println("Height:", pokemon.Weight)
+		fmt.Println("Stats:")
+		for _, s := range pokemon.Stats {
+			fmt.Println(" -"+s.Stat.Name, s.BaseStat)
+		}
+		fmt.Println("Type/s:")
+		for _, t := range pokemon.Types {
+			fmt.Println(" -" + t.Type.Name)
+		}
+
+	}
+
+	return nil
+
+}
+
+func catch(conf *config, args []string) error {
+	if len(args) < 1 {
+		fmt.Println("Usage: catch <pokemon_name>")
+		return nil
+	}
+	pokemonName := args[0]
+	poke_catch, err := conf.API.GetPokemon(pokemonName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Throwing a Pokeball at %s...\n", poke_catch.Name)
+
+	res := rand.Intn(poke_catch.BaseExperience)
+	luck := rand.Float64() * 0.9
+	catchrate := float64(res) + (luck * float64(res))
+
+	if catchrate < (float64(poke_catch.BaseExperience) * 0.8) {
+		fmt.Printf("%s escaped!\n", poke_catch.Name)
+		return nil
+	}
+
+	fmt.Printf("%s was caught!\n", poke_catch.Name)
+	fmt.Println("You may now inspect it with the inspect command.")
+	conf.caughtPokemon[poke_catch.Name] = poke_catch
+	return nil
 }
 
 func explore(conf *config, args []string) error {
